@@ -21,7 +21,7 @@ options = PoseLandmarkerOptions(
 
 landmarker = PoseLandmarker.create_from_options(options)
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0)  # Use 0 for webcam, or provide video file path")
 
 fall_counter = 0
 FALL_THRESHOLD = 15

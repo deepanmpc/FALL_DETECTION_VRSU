@@ -28,7 +28,8 @@ fps = cap.get(cv2.CAP_PROP_FPS)
 frame_number = 0
 
 fall_counter = 0
-FALL_THRESHOLD = int(fps * 1)  # 1 second duration
+FALL_THRESHOLD = int(fps * 0.2)  # Reduced latency
+LONG_FALL_THRESHOLD = int(fps * 10) # 10 seconds duration
 
 def calculate_angle(a, b):
     angle = np.arctan2(b[1] - a[1], b[0] - a[0])
@@ -50,17 +51,45 @@ while cap.isOpened():
     if result.pose_landmarks:
         landmarks = result.pose_landmarks[0]
 
-        # LEFT SHOULDER (11), LEFT HIP (23)
-        shoulder = [landmarks[11].x, landmarks[11].y]
-        hip = [landmarks[23].x, landmarks[23].y]
+        # Get coordinates for both sides to improve accuracy
+        l_shoulder = [landmarks[11].x, landmarks[11].y]
+        r_shoulder = [landmarks[12].x, landmarks[12].y]
+        l_hip = [landmarks[23].x, landmarks[23].y]
+        r_hip = [landmarks[24].x, landmarks[24].y]
 
-        angle = abs(calculate_angle(shoulder, hip))
+        # Calculate midpoints
+        shoulder = [(l_shoulder[0] + r_shoulder[0]) / 2, (l_shoulder[1] + r_shoulder[1]) / 2]
+        hip = [(l_hip[0] + r_hip[0]) / 2, (l_hip[1] + r_hip[1]) / 2]
+
+        # Calculate lean angle from vertical (0 degrees = upright, 90 degrees = horizontal)
+        dy = abs(shoulder[1] - hip[1])
+        dx = abs(shoulder[0] - hip[0])
+        
+        # Use arctan(dx/dy) for angle from vertical
+        if dy == 0:
+            angle = 90.0
+        else:
+            angle = np.degrees(np.arctan(dx / dy))
 
         # ===== Fall Logic =====
-        if angle < 30:   # near horizontal
+        # Thresholds:
+        # 30-60 degrees: About to fall / Unstable
+        # > 60 degrees: Fallen
+
+        if angle > 60:
             fall_counter += 1
+            status = "FALLEN"
+        elif angle > 30:
+            fall_counter = 0  # Reset fall counter as they haven't fully fallen yet
+            status = "ABOUT_TO_FALL"
         else:
             fall_counter = 0
+            status = "NORMAL"
+
+        if status == "ABOUT_TO_FALL":
+             cv2.putText(frame, "ABOUT TO FALL", (50, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (0, 255, 255), 3) # Yellow
 
         if fall_counter > FALL_THRESHOLD:
             cv2.putText(frame, "FALL DETECTED",
@@ -68,7 +97,15 @@ while cap.isOpened():
                         cv2.FONT_HERSHEY_SIMPLEX,
                         1,
                         (0, 0, 255),
-                        3)
+                        3) # Red
+            
+            if fall_counter > LONG_FALL_THRESHOLD:
+                cv2.putText(frame, "CAUTION: Extended Fall",
+                        (50, 150),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (0, 128, 255),
+                        2)
 
         # Draw skeleton
         for lm in landmarks:
