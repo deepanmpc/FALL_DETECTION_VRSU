@@ -118,6 +118,10 @@ class FallDetector:
             if len(state["nose_y_history"]) >= 2:
                 velocity = state["nose_y_history"][-1] - state["nose_y_history"][-2]
 
+            # Cache for Frontend readouts
+            state["angle"] = angle
+            state["velocity"] = velocity
+
             # Distance normalization logic on thresholds
             area_factor = max(1.0, 50000.0 / max(bbox_area, 1.0))
             dynamic_fall_angle = self.config["fall_angle_threshold"] + (area_factor * 5)
@@ -125,12 +129,16 @@ class FallDetector:
 
             if angle > dynamic_fall_angle:
                 state["fall_counter"] += 1
-                base_confidence = 0.5
+                
+                # Base confidence scales up the longer the person is laying down
+                base_confidence = 0.5 + (state["fall_counter"] * 0.02)
+                
                 if velocity > self.config["head_velocity_threshold"]:
-                    base_confidence += 0.3
+                    base_confidence += 0.4
+                    
                 state["confidence_score"] = min(1.0, base_confidence)
 
-                if state["fall_counter"] > self.config["fall_frame_threshold"] and state["confidence_score"] > self.config["confidence_threshold"]:
+                if state["fall_counter"] >= self.config["fall_frame_threshold"] and state["confidence_score"] >= self.config["confidence_threshold"]:
                     if state["fallen_time"] is None:
                         state["fallen_time"] = timestamp_ms
                     

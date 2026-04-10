@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaRa Vision - Real-Time Fall Detection</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-mesh"></div>
+    
+    <header class="dashboard-header">
+        <div class="logo">
+            <span class="pulse-dot normal" id="global-status-dot"></span>
+            <h1>LaRa Vision <span class="badge">LIVE</span></h1>
+        </div>
+        <div class="settings">
+            <span>Confidence Threshold: <strong id="conf-thres-val">70%</strong></span>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- Video Feed Panel -->
+        <section class="panel video-panel">
+            <div class="panel-header">
+                <h2>Camera Feed (Camera 01)</h2>
+            </div>
+            <div class="video-container" id="video-feed">
+                <!-- Simulated tracking boxes overlay -->
+                <div class="tracking-box" id="tracking-box">
+                    <span class="label" id="box-label">ID: 1 - NORMAL</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats and Telemetry -->
+        <aside class="sidebar">
+            <div class="panel status-card normal-state" id="main-status-card">
+                <h3>Current Status</h3>
+                <h1 id="status-text">NORMAL</h1>
+                <p id="status-subtext">No anomalies detected.</p>
+            </div>
+
+            <div class="panel metrics-panel">
+                <h3>Telemetry</h3>
+                <div class="metric">
+                    <span>Pose Angle</span>
+                    <span class="value" id="angle-value">85°</span>
+                </div>
+                <div class="metric">
+                    <span>Head Velocity</span>
+                    <span class="value" id="velocity-value">0.00 m/s</span>
+                </div>
+                <div class="metric">
+                    <span>AI Confidence</span>
+                    <span class="value" id="confidence-value">0%</span>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="confidence-bar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="panel logs-panel">
+                <h3>Event Log</h3>
+                <ul id="event-log">
+                    <li><span class="time">10:25:00</span> System initialized...</li>
+                </ul>
+            </div>
+        </aside>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

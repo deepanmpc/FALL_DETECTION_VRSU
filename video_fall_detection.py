@@ -1,3 +1,4 @@
+import sys
 import cv2
 from fall_detector import FallDetector
 import os
@@ -5,7 +6,7 @@ import os
 def main():
     # Instantiate the class-based detector
     detector = FallDetector()
-    video_path = "test_video.mp4"
+    video_path = sys.argv[1] if len(sys.argv) > 1 else "test_video.mp4"
     
     # Graceful fallback if video doesn't exist
     if not os.path.exists(video_path):

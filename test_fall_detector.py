@@ -72,7 +72,7 @@ def test_angle_calculation_and_confidence(detector):
     detector.landmarker.detect_for_video = MagicMock(return_value=mock_result)
     
     # Process frames to hit FALLEN state
-    for i in range(10):
+    for i in range(25):
         detector.process_frame(frame, i * 33)
         
     status = detector.get_status(1)
@@ -93,7 +93,7 @@ def test_state_transitions(detector):
     
     # 2. FALLEN
     mock_result.pose_landmarks = [create_synthetic_landmarks("fallen")]
-    for i in range(1, 10):
+    for i in range(1, 25):
         detector.process_frame(frame, i * 33)
     assert detector.get_status(1)["status"] == "FALLEN"
     
@@ -110,7 +110,7 @@ def test_floor_activity_disambiguation(detector):
     mock_result.pose_landmarks = [create_synthetic_landmarks("floor_activity")]
     detector.landmarker.detect_for_video = MagicMock(return_value=mock_result)
     
-    for i in range(10):
+    for i in range(25):
         detector.process_frame(frame, i * 33)
         
     status = detector.get_status(1)
@@ -130,7 +130,7 @@ def test_alert_throttle_logic(mock_email, mock_sms, detector):
     alerts.last_alert_time.clear()
     
     # Trigger first fall
-    for i in range(10):
+    for i in range(25):
         detector.process_frame(frame, i * 33)
         
     assert mock_sms.called
@@ -143,8 +143,8 @@ def test_alert_throttle_logic(mock_email, mock_sms, detector):
     detector.reset()
     
     # Trigger fall again within cooldown window
-    for i in range(10):
-        detector.process_frame(frame, (i + 10) * 33)
+    for i in range(25):
+        detector.process_frame(frame, (i + 25) * 33)
         
     # Should be throttled, so alerts shouldn't be fired again
     assert not mock_sms.called
