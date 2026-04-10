@@ -9,139 +9,153 @@ document.addEventListener("DOMContentLoaded", () => {
     const velocityValue = document.getElementById('velocity-value');
     const confidenceValue = document.getElementById('confidence-value');
     const confidenceBar = document.getElementById('confidence-bar');
-    
-    const trackingBox = document.getElementById('tracking-box');
-    const boxLabel = document.getElementById('box-label');
     const eventLog = document.getElementById('event-log');
+    
+    const feedStatus = document.getElementById('feed-status');
+    const videoStream = document.getElementById('video-stream');
+    const noFeedMsg = document.getElementById('no-feed-msg');
+    
+    const btnRealtime = document.getElementById('btn-realtime');
+    const btnVideo = document.getElementById('btn-video');
+    const btnStop = document.getElementById('btn-stop');
+    const toastMsg = document.getElementById('toast-message');
+    const dbLogsBody = document.getElementById('db-logs-body');
 
-    // State Variables for Simulation
-    let angle = 80;
-    let confidence = 0;
-    let velocity = 0;
-    let currentState = 'NORMAL'; 
-    let simulationTime = 0;
+    let activeStream = false;
+    let currentState = 'NORMAL';
 
-    // Simulation Loop (runs every 100ms)
-    setInterval(() => {
-        simulationTime++;
-        
-        // --- 1. Simulate Pose Dynamics ---
-        
-        // Every 150 ticks (~15 sec), simulate a fall event
-        const cycle = simulationTime % 200;
-        
-        if (cycle > 50 && cycle < 120) {
-            // FALLING SCENARIO
-            if (angle > 15) angle -= 3; // drops to horizontal
-            velocity = (Math.random() * 0.05 + 0.02).toFixed(2);
+    // 1. Control APIs to Python Backend
+    async function sendCommand(mode) {
+        toastMsg.innerText = "Processing...";
+        try {
+            const res = await fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            });
+            const data = await res.json();
+            toastMsg.innerText = data.message;
+            toastMsg.style.color = data.success ? "var(--color-normal)" : "var(--color-danger)";
             
-            // Confidence builds over time while fallen (my new logic!)
-            if (angle < 45) {
-                confidence += 4;
+            if (data.success && mode !== 'stop') {
+                // Attach video stream src directly to the IMG tag MJPEG endpoint
+                videoStream.src = `/video_feed?t=${new Date().getTime()}`;
+                videoStream.style.display = 'block';
+                noFeedMsg.style.display = 'none';
+                feedStatus.innerText = "Active";
+                feedStatus.style.color = "var(--color-normal)";
+                activeStream = true;
+                logEvent(`Started AI Feed: ${mode}`);
+            } else if (mode === 'stop') {
+                videoStream.src = "";
+                videoStream.style.display = 'none';
+                noFeedMsg.style.display = 'block';
+                feedStatus.innerText = "Inactive";
+                feedStatus.style.color = "var(--color-warning)";
+                activeStream = false;
+                logEvent("Stopped AI Feed");
+                changeState('NORMAL');
+                updateMetrics(0, 0, 0);
             }
-        } 
-        else if (cycle >= 120 && cycle < 130) {
-            // RECOVERY SCENARIO
-            angle += 8;
-            velocity = (Math.random() * 0.02).toFixed(2);
-            confidence -= 10;
-        } 
-        else {
-            // NORMAL STANDING SCENARIO
-            angle = Math.min(90, angle + Math.random() * 2);
-            velocity = (Math.random() * 0.01).toFixed(2);
-            confidence = Math.max(0, confidence - 5);
+        } catch (e) {
+            toastMsg.innerText = "Error connecting to backend API. Is app.py running?";
+            toastMsg.style.color = "var(--color-danger)";
         }
+    }
 
-        // Clamp values
-        confidence = Math.min(100, Math.max(0, confidence));
-        if (confidence > 100) confidence = 100;
-        
-        // --- 2. Determine State based on thresholds ---
-        let newState = 'NORMAL';
-        if (confidence > 70 && angle < 45) {
-            newState = 'FALLEN';
-        } else if (confidence > 30) {
-            newState = 'ABOUT_TO_FALL';
-        }
+    btnRealtime.addEventListener('click', () => sendCommand('realtime'));
+    btnVideo.addEventListener('click', () => sendCommand('video'));
+    btnStop.addEventListener('click', () => sendCommand('stop'));
 
-        // --- 3. Update the UI DOM ---
-        angleValue.innerText = `${Math.floor(angle)}°`;
-        velocityValue.innerText = `${velocity} m/s`;
-        confidenceValue.innerText = `${Math.floor(confidence)}%`;
-        confidenceBar.style.width = `${confidence}%`;
+    // 2. Fetch Live Telemetry from Python Backend
+    async function pollStatus() {
+        if (!activeStream) return;
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            updateMetrics(data.angle, data.velocity, data.confidence);
+            
+            if (data.status !== currentState) {
+                changeState(data.status);
+                logEvent(`State changed: ${data.status}`);
+                currentState = data.status;
+            }
+        } catch (e) {}
+    }
 
-        // Physical Tracking Box Simulation (it drops when fallen)
-        const boxTop = angle < 45 ? '80%' : '50%';
-        const boxHeight = angle < 45 ? '120px' : '250px';
-        const boxWidth = angle < 45 ? '250px' : '120px';
-        trackingBox.style.top = boxTop;
-        trackingBox.style.height = boxHeight;
-        trackingBox.style.width = boxWidth;
+    // 3. Fetch SQLite DB Logs from Python Backend
+    async function pollLogs() {
+        try {
+            const res = await fetch('/api/logs');
+            const logs = await res.json();
+            
+            dbLogsBody.innerHTML = "";
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                const timeStr = new Date(log.timestamp * 1000).toLocaleTimeString();
+                
+                // Colorizing the Status column based on danger
+                let statusColor = log.event_type === 'FALLEN' ? 'var(--color-danger)' : 
+                                  log.event_type === 'ABOUT_TO_FALL' ? 'var(--color-warning)' : 'var(--text-secondary)';
+                
+                tr.innerHTML = `
+                    <td>#${log.id}</td>
+                    <td>${timeStr}</td>
+                    <td style="color: ${statusColor}; font-weight: bold;">${log.event_type}</td>
+                    <td>${log.angle.toFixed(1)}°</td>
+                    <td>${(log.confidence*100).toFixed(0)}%</td>
+                `;
+                dbLogsBody.appendChild(tr);
+            });
+        } catch (e) {}
+    }
 
-        // Apply State Transitions
-        if (newState !== currentState) {
-            changeState(newState);
-            logEvent(`State transitioned from ${currentState} to ${newState}`);
-            currentState = newState;
-        }
+    // Start Polling Loops
+    setInterval(pollStatus, 200); // 200ms polls for live AI metric updates
+    setInterval(pollLogs, 2500);  // 2.5sec polls checking the database for new recorded falls
 
-    }, 100);
+    function updateMetrics(angle, velocity, conf) {
+        angleValue.innerText = `${angle.toFixed(1)}°`;
+        velocityValue.innerText = `${velocity.toFixed(3)} m/s`;
+        confidenceValue.innerText = `${conf.toFixed(0)}%`;
+        confidenceBar.style.width = `${Math.min(100, conf)}%`;
+    }
 
-    // Helper functions for UI manipulation
+    // Dynamic Theming wrapper
     function changeState(state) {
-        // Reset classes
         statusCard.className = 'panel status-card';
         globalDot.className = 'pulse-dot';
         
-        if (state === 'NORMAL') {
+        if (state === 'NORMAL' || state === 'STUMBLE' || state === 'FLOOR_ACTIVITY') {
             statusCard.classList.add('normal-state');
-            statusText.innerText = 'NORMAL';
-            statusSubtext.innerText = 'No anomalies detected.';
+            statusText.innerText = state;
+            statusSubtext.innerText = 'Safe conditions detected.';
             confidenceBar.style.background = 'var(--color-normal)';
-            trackingBox.style.borderColor = 'var(--color-normal)';
-            boxLabel.style.background = 'var(--color-normal)';
-            boxLabel.innerText = 'ID: 1 - NORMAL';
             globalDot.classList.add('normal');
         } 
         else if (state === 'ABOUT_TO_FALL') {
             statusCard.classList.add('warning-state');
-            statusText.innerText = 'WARNING';
-            statusSubtext.innerText = 'Person may be falling... tracking.';
+            statusText.innerText = 'WARNING / FALLING';
+            statusSubtext.innerText = 'Metrics indicate rapid dropping.';
             confidenceBar.style.background = 'var(--color-warning)';
-            trackingBox.style.borderColor = 'var(--color-warning)';
-            boxLabel.style.background = 'var(--color-warning)';
-            boxLabel.innerText = 'ID: 1 - ABOUT_TO_FALL';
-            globalDot.classList.add('warning'); // generic static yellow could be added
+            globalDot.classList.add('warning'); 
             globalDot.style.background = 'var(--color-warning)';
         }
         else if (state === 'FALLEN') {
             statusCard.classList.add('danger-state');
             statusText.innerText = 'FALL DETECTED';
-            statusSubtext.innerText = 'CRITICAL: Sending alerts immediately.';
+            statusSubtext.innerText = 'CRITICAL: Alert conditions met.';
             confidenceBar.style.background = 'var(--color-danger)';
-            trackingBox.style.borderColor = 'var(--color-danger)';
-            boxLabel.style.background = 'var(--color-danger)';
-            boxLabel.innerText = 'ID: 1 - FALLEN!';
             globalDot.classList.add('danger');
-            
-            // Pop an alert the first time
-            setTimeout(() => {
-                logEvent("CRITICAL ALERT DISPATCHED TO SMS & EMAIL");
-            }, 500);
         }
     }
 
     function logEvent(message) {
         const li = document.createElement('li');
-        const now = new Date();
-        const timeString = now.toTimeString().split(' ')[0];
+        const timeString = new Date().toLocaleTimeString();
         li.innerHTML = `<span class="time">${timeString}</span> ${message}`;
         eventLog.prepend(li);
-        
-        // keep log small
-        if(eventLog.children.length > 25) {
-            eventLog.removeChild(eventLog.lastChild);
-        }
+        if(eventLog.children.length > 50) eventLog.removeChild(eventLog.lastChild);
     }
 });

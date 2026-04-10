@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaRa Vision - Real-Time Fall Detection</title>
+    <title>LaRa Vision - Live Web Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 </head>
@@ -13,44 +13,80 @@
     <header class="dashboard-header">
         <div class="logo">
             <span class="pulse-dot normal" id="global-status-dot"></span>
-            <h1>LaRa Vision <span class="badge">LIVE</span></h1>
+            <h1>LaRa Vision <span class="badge">LIVE API</span></h1>
         </div>
         <div class="settings">
-            <span>Confidence Threshold: <strong id="conf-thres-val">70%</strong></span>
+            <span>Server: <strong style="color:var(--color-normal)">Online</strong> | Threshold: <strong>70%</strong></span>
         </div>
     </header>
 
     <main class="dashboard-grid">
-        <!-- Video Feed Panel -->
-        <section class="panel video-panel">
-            <div class="panel-header">
-                <h2>Camera Feed (Camera 01)</h2>
-            </div>
-            <div class="video-container" id="video-feed">
-                <!-- Simulated tracking boxes overlay -->
-                <div class="tracking-box" id="tracking-box">
-                    <span class="label" id="box-label">ID: 1 - NORMAL</span>
+        <!-- Main Column 1 -->
+        <div class="feed-column">
+            <!-- Video Feed Panel -->
+            <section class="panel video-panel">
+                <div class="panel-header" style="display:flex; justify-content:space-between; margin-bottom: 15px;">
+                    <h2>Camera Feed</h2>
+                    <span id="feed-status" style="color:var(--color-warning);">Inactive</span>
                 </div>
-            </div>
-        </section>
+                <!-- Real Physical Video Stream connects here -->
+                <div class="video-container" id="video-wrapper">
+                    <img id="video-stream" src="" alt="Video Stream Inactive" style="width:100%; height:100%; object-fit: cover; display:none;">
+                    <div id="no-feed-msg" style="position:absolute; top:50%; width:100%; text-align:center; color:rgba(255,255,255,0.3); font-weight:bold;">
+                        NO ACTIVE STREAM
+                    </div>
+                </div>
+            </section>
+            
+            <!-- CLI Control Panel -->
+            <section class="panel controls-panel">
+                <h3>CLI Controls</h3>
+                <div class="button-row" style="display:flex; gap: 10px; margin-top: 15px;">
+                    <button id="btn-realtime" class="btn btn-primary">📷 Start Webcam</button>
+                    <button id="btn-video" class="btn btn-secondary">🎬 Start Video File</button>
+                    <button id="btn-stop" class="btn btn-danger">⏹ Stop Process</button>
+                </div>
+                <div id="toast-message" style="margin-top:10px; font-size:0.8rem; color:var(--text-secondary);">Awaiting command...</div>
+            </section>
+            
+            <section class="panel logs-panel">
+                <h3>Database Activity Logs</h3>
+                <div class="table-wrapper">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Max Angle</th>
+                                <th>Max Conf</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-logs-body">
+                            <!-- Injected by API -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
 
-        <!-- Stats and Telemetry -->
+        <!-- Sidebar / Telemetry -->
         <aside class="sidebar">
             <div class="panel status-card normal-state" id="main-status-card">
-                <h3>Current Status</h3>
+                <h3>Current AI Status</h3>
                 <h1 id="status-text">NORMAL</h1>
-                <p id="status-subtext">No anomalies detected.</p>
+                <p id="status-subtext">Awaiting Telemetry</p>
             </div>
 
             <div class="panel metrics-panel">
-                <h3>Telemetry</h3>
+                <h3>Live Telemetry</h3>
                 <div class="metric">
                     <span>Pose Angle</span>
-                    <span class="value" id="angle-value">85°</span>
+                    <span class="value" id="angle-value">0.0°</span>
                 </div>
                 <div class="metric">
                     <span>Head Velocity</span>
-                    <span class="value" id="velocity-value">0.00 m/s</span>
+                    <span class="value" id="velocity-value">0.00</span>
                 </div>
                 <div class="metric">
                     <span>AI Confidence</span>
@@ -63,9 +99,9 @@
             </div>
 
             <div class="panel logs-panel">
-                <h3>Event Log</h3>
+                <h3>UI Engine Logs</h3>
                 <ul id="event-log">
-                    <li><span class="time">10:25:00</span> System initialized...</li>
+                    <li><span class="time">sys</span> Frontend initialized.</li>
                 </ul>
             </div>
         </aside>

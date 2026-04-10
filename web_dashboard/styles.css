@@ -264,3 +264,52 @@ body {
     70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
+
+/* API Elements: Buttons */
+.feed-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.controls-panel {
+    border-top: 2px solid var(--color-accent);
+}
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: white;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.btn:active { transform: translateY(0); }
+.btn-primary { background: var(--color-accent); }
+.btn-secondary { background: #64748b; }
+.btn-danger { background: rgba(239, 68, 68, 0.2); color: var(--color-danger); border: 1px solid var(--color-danger); }
+
+/* DB Table */
+.table-wrapper {
+    max-height: 250px;
+    overflow-y: auto;
+    margin-top: 15px;
+}
+.db-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.db-table th, .db-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--panel-border);
+}
+.db-table th {
+    background: rgba(0,0,0,0.2);
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+}
+.db-table tbody tr:hover { background: rgba(255,255,255,0.05); }
