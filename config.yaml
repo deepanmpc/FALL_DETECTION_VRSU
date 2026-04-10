@@ -1,0 +1,10 @@
+model_path: "pose_landmarker_full.task"
+fall_angle_threshold: 60.0
+about_to_fall_threshold: 30.0
+fall_frame_threshold: 15
+confidence_threshold: 0.7
+head_velocity_threshold: 0.015
+alert_cooldown_seconds: 60
+min_bbox_area: 5000
+log_path: "fall_events.csv"
+db_path: "fall_events.db"

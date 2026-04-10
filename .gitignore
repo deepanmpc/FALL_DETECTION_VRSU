@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+fall_events.csv
+fall_events.db
+fall_snapshot_*.jpg
+pose_landmarker_full.task
