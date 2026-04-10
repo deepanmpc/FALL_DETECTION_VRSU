@@ -4,6 +4,8 @@ from fall_detector import FallDetector
 import time
 import logger
 import os
+import threading
+import numpy as np
 
 app = Flask(__name__, static_folder='web_dashboard')
 
@@ -11,8 +13,10 @@ app = Flask(__name__, static_folder='web_dashboard')
 detector = FallDetector()
 
 # Global stream state
-cap = None
 active_mode = None
+target_video_path = "test_video.mp4"
+latest_processed_frame = None
+
 status_cache = {
     "status": "NORMAL",
     "angle": 90.0,
@@ -20,29 +24,55 @@ status_cache = {
     "confidence": 0.0
 }
 
-def generate_frames():
-    global cap, active_mode, status_cache
+def camera_worker_thread():
+    """ Dedicated background thread to handle macOS VideoCapture thread-safety """
+    global active_mode, target_video_path, latest_processed_frame, status_cache
+    
+    cap = None
+    current_mode = None
+    
+    # Create a nice placeholder frame so the web stream doesn't crash on boot
+    placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(placeholder, "CONNECTING...", (200, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    latest_processed_frame = placeholder
+    
     while True:
-        if cap is None or not cap.isOpened():
+        # State swap detection
+        if current_mode != active_mode:
+            if cap is not None:
+                cap.release()
+                cap = None
+            
+            detector.reset()
+            current_mode = active_mode
+            
+            if current_mode == 'realtime':
+                cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+            elif current_mode == 'video':
+                cap = cv2.VideoCapture(target_video_path)
+            else:
+                cv2.putText(placeholder, "STREAM INACTIVE", (180, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 100), 2)
+                latest_processed_frame = placeholder
+
+        # If we have no active feed, sleep
+        if current_mode is None or cap is None or not cap.isOpened():
             time.sleep(0.1)
             continue
             
         ret, frame = cap.read()
         if not ret:
-            # If video ends, loop it automatically
-            if active_mode == "video":
+            if current_mode == "video":
+                # Auto-loop video
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
             else:
                 time.sleep(0.1)
-                continue
+            continue
 
+        # AI Processing
         timestamp_ms = int(time.time() * 1000)
-        
-        # Process frame
         processed_frame = detector.process_frame(frame, timestamp_ms)
         
-        # Push live metrics up to HTML Status API
+        # Telemetry extraction
         if len(detector.tracked_persons) > 0:
             pid = list(detector.tracked_persons.keys())[0]
             state = detector.tracked_persons[pid]
@@ -54,13 +84,25 @@ def generate_frames():
             status_cache["status"] = "NORMAL"
             status_cache["confidence"] = 0.0
             
-        # Encode Frame to JPEG
-        ret, buffer = cv2.imencode('.jpg', processed_frame)
-        frame_bytes = buffer.tobytes()
-        
-        # Boundary generator stream for MJPEG
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        latest_processed_frame = processed_frame
+        time.sleep(0.01) # Small sleep to yield CPU
+
+# Boot the isolated camera thread
+cam_thread = threading.Thread(target=camera_worker_thread, daemon=True)
+cam_thread.start()
+
+
+def generate_frames():
+    global latest_processed_frame
+    while True:
+        if latest_processed_frame is not None:
+            # Safely encode the latest physical frame
+            ret, buffer = cv2.imencode('.jpg', latest_processed_frame)
+            if ret:
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.05) # ~20 FPS limit for the web stream
 
 @app.route('/')
 def index():
@@ -93,41 +135,30 @@ def get_logs():
                 "confidence": row[5],
                 "duration": row[6]
             })
-        return jsonify(formatted[:15])  # Return the latest 15 events
+        return jsonify(formatted[:15])
     except Exception as e:
         return jsonify([])
 
 @app.route('/api/control', methods=['POST'])
 def control():
-    global cap, active_mode
+    global active_mode, target_video_path
     data = request.json
     mode = data.get('mode')
     
-    # Cleanup previous instances
-    if cap is not None:
-        cap.release()
-        
-    detector.reset()
-    status_cache["status"] = "NORMAL"
-    status_cache["confidence"] = 0.0
-    
     if mode == 'realtime':
-        # Fast cam startup for macOS
-        cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
         active_mode = "realtime"
-        return jsonify({"success": True, "message": "Camera Feed Started"})
+        return jsonify({"success": True, "message": "Camera Feed Request Sent"})
         
     elif mode == 'video':
-        video_path = data.get('path', 'test_video.mp4')
-        if not os.path.exists(video_path):
-            return jsonify({"success": False, "message": f"Error: File {video_path} not found!"})
-        cap = cv2.VideoCapture(video_path)
+        user_path = data.get('path', 'test_video.mp4')
+        if not os.path.exists(user_path):
+            return jsonify({"success": False, "message": f"Error: File {user_path} not found!"})
+        target_video_path = user_path
         active_mode = "video"
-        return jsonify({"success": True, "message": f"Video Feed '{video_path}' Started"})
+        return jsonify({"success": True, "message": f"Video Feed '{user_path}' Request Sent"})
         
     elif mode == 'stop':
         active_mode = None
-        cap = None
         return jsonify({"success": True, "message": "Feed Stopped"})
         
     return jsonify({"success": False, "message": "Invalid control mode"})
@@ -138,7 +169,6 @@ if __name__ == '__main__':
     print(" Available on: http://localhost:5005")
     print("====================================")
     
-    # Disable spammy CV logs
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     os.environ['GLOG_minloglevel'] = '2'
     
